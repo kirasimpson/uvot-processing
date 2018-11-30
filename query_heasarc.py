@@ -3,7 +3,7 @@ import os
 import stat
 import argparse
 import sys
-import shutil
+import glob
 
 def query_heasarc(input_obj, list_opt=False):
 
@@ -15,12 +15,6 @@ def query_heasarc(input_obj, list_opt=False):
 		obj_list = [input_obj]
 	
 	for obj in obj_list:
-		#for testing phase, uncomment the five lines below, afterwards get rid of it
-		# if not os.path.exists("/Users/kzs1031/lvls/python/"+obj):	
-		# 	os.mkdir(obj)
-		# else:
-		# 	shutil.rmtree("/Users/kzs1031/lvls/python/"+obj)
-		# 	os.mkdir(obj)
 
 		#make new folders for each of the objects	
 		os.mkdir(obj)
@@ -33,8 +27,11 @@ def query_heasarc(input_obj, list_opt=False):
 
 		if len(rows_list) == 1:
 			print("No observations of " + obj + " were found in HEASARC.")
-			shutil.rmtree("/Users/kzs1031/lvls/python/"+obj)
-			os.chdir("/Users/kzs1031/lvls/python/")
+			dir_path = '*/*/*/' + gal
+			r = glob.glob(dir_path)
+			for i in r:
+				os.remove(i)
+			os.chdir("..")
 			continue
 
 		#run browse_extract with all of the parameters needed to make data.dat
