@@ -145,52 +145,48 @@ def process_progress():
 
 
 
-def data_download():
-	unprocessed_gals = open('unprocessed_gals', 'w+')
-	why_bypass = open('why_bypass', 'w+')
 
-	swift_db_query() #script written to query the swift database, search the sotbackend fillin subdatabase and return all the targets that are marked as done and have
-	ready_to_process = np.loadtxt('ready_to_process_galaxies.txt', dtype = 'str').tolist()
+unprocessed_gals = open('unprocessed_gals', 'w+')
+why_bypass = open('why_bypass', 'w+')
 
-	for gal in ready_to_process: #gal_list now comes from swift_db_query, so is it better to just put the code in here??
-		os.chdir('..') #cd into full lvls directory so it doesn't make everything in your python directory
+swift_db_query() #script written to query the swift database, search the sotbackend fillin subdatabase and return all the targets that are marked as done and have
+ready_to_process = np.loadtxt('ready_to_process_galaxies.txt', dtype = 'str').tolist()
 
-		query_heasarc(gal) #only needs to accept one string object since we're iterating through list right now
+for gal in ready_to_process: #gal_list now comes from swift_db_query, so is it better to just put the code in here??
+	os.chdir('..') #cd into full lvls directory so it doesn't make everything in your python directory
 
-		obs_folder_exists = glob.glob("00*")
-		with open('heasarc_obs.dat', 'r') as fh:
-			rows_list = fh.readlines()
+	query_heasarc(gal) #only needs to accept one string object since we're iterating through list right now
 
-		total_obs = len(rows_list) - 4
-		if total_obs != len(obs_folder_exists): #i want this to happen if there is a new download, but also if this object is new then download has to be run
-												#so if this needs to be run for a new object too, where do I account for that too??
+	obs_folder_exists = glob.glob("00*")
+	with open('heasarc_obs.dat', 'r') as fh:
+		rows_list = fh.readlines()
 
-
-			download_heasarc('heasarc_obs.dat')
-		else:
-			print("* Download already done")
-			print("* No new observations to download")
-			print('* Moving on to processing...')
-			#uh hang on can I just stick the processing function into this?? OH YOU FOOL THIS IS THE USE OF FUNCTIONIZING
-			#YOU MADMAN
-			#skip on here to next shenanigans
+	total_obs = len(rows_list) - 4
+	if total_obs != len(obs_folder_exists): #i want this to happen if there is a new download, but also if this object is new then download has to be run
+											#so if this needs to be run for a new object too, where do I account for that too??
 
 
-		progress = process_progress()
-		if progress = True:
-			continue
+		download_heasarc('heasarc_obs.dat')
+	else:
+		print("* Download already done")
+		print("* No new observations to download")
+		print('* Moving on to processing...')
+		#uh hang on can I just stick the processing function into this?? OH YOU FOOL THIS IS THE USE OF FUNCTIONIZING
+		#YOU MADMAN
+		#skip on here to next shenanigans
 
 
-
-		#processing progress function and filter checks still need to go somewhere in here, but they can be jumped to instead of being part of the bigger function
-		
-
-		image_processing()
-
-	unprocessed_gals.close()
-
-	why_bypass.close()
+	progress = process_progress()
+	if progress = True:
+		continue
 
 
 
-auto_color()
+	#processing progress function and filter checks still need to go somewhere in here, but they can be jumped to instead of being part of the bigger function
+
+
+	image_processing()
+
+unprocessed_gals.close()
+
+why_bypass.close()
