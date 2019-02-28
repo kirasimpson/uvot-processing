@@ -10,7 +10,7 @@ def obs_progress_query(survey_reqtime, compare_times=True):
 	-------------
 	survey_reqtime : list of strings
         	Name(s) of object(s) to search for plus time asked for by requester
-		imported from text file.
+		imported from text file. Only used if compare_times=True.
 		
 	compare_times : boolean (default=True)
 		Useful if long-exposure targets are marked 'done'
