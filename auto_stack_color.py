@@ -14,18 +14,29 @@ import aplpy
 import uvot_deep
 import config_uvot_mosaic
 import offset_mosaic
-import swift_db_query
+import swift_db_query as sdq
 import query_heasarc
 import download_heasarc
+import surface_phot as sp
+import phot_plot as phot
+
+def photometry_time():
+	sp.do_phot() #is the table from the paper Lea sent me necessary here? as an input?
+
+	sp.surface_phot()
+
+	phot.phot_plot()
 
 
 def image_processing():
 		#test this out, include checking for new data
 		#galaxies with new data...how do I make a new list?
-	idl = pIDLy.IDL()
 
-
-	cr_img_exists = glob.glob('*cr.fits') #turn this into an if/and where there's a second condition that concerns a second data download...hm. what could I check?
+	cr_img_exists = glob.glob('*cr.fits') #makes a list of count rate images that exist in the current directory
+	#cr images made by uvot_deep, so proof that uvot_deep has been run before
+	#inter_list created w/i download_heasarc.py...which is a problem. (make that return true??)
+		#make a sub-function in download heasarc that can return as true, then I can call module here and check true/false
+	#exists if new files exist and were downloaded. 
 	if len(cr_img_list) == 0 or inter_list:
 		try:
 			uvot_deep.uvot_deep(id_list, Name_Prefix+'_', ['w2','m2','w1']) #tool made by Lea Hagen
@@ -33,29 +44,38 @@ def image_processing():
 			print('* Required files not made out of uvot_deep for '+gal+', moving on...')
 			unprocessed_gals.write(gal + '\n')
 			why_bypass.write(gal+': required files not made out of uvot_deep'+'\n')
-			continue
+			#continue #fix continue
+			return False #does this work here?
+
 		except OSError:
 			print('Too many open files error thrown, whatever that means. Moving on...') #sass maybe not good, maybe chill
 			unprocessed_gals.write(gal + '\n')
 			why_bypass.write(gal+': too many open files error' + '\n')
-			continue
+			#continue #fix continue
+			return False #does this work here?
+
+
 	else:
 		print("* uvot_deep already completed successfully, moving on!")
-		input()
+		#input()
 
 
-	try:
+	try: #make sure this does run again
 		if True:
+			print('* running offset_mosaic')
 			offset_mosaic.offset_mosaic(gal+'_', gal+'_offset_', filter_list,
 										min_exp_w2=150, min_exp_m2=150, min_exp_w1=150, restack_id=True)
 	except IndexError:
 		print("* index 0 is out of bounds for axis 0 with size zero")
 		unprocessed_gals.write(gal+'\n')
 		why_bypass.write(gal+': offset mosaic problem, index 0 is out of bounds for axis 0 with size zero'+'\n')
-		continue
+		#continue #fix continue
+		return False
 
 	#list of uv filters, can be changed if someone needs optical filter images as well.
 	#filter_list = ['w1', 'm2', 'w2']
+
+	idl = pIDLy.IDL() #crANKY
 
 	Name_Prefix = gal
 
@@ -106,6 +126,10 @@ def image_processing():
 							 pmax_r=99.95, pmax_g=99.9, pmax_b=99.9,
 							 make_nans_transparent=True)
 
+	return True
+
+
+
 
 def filter_check():
 	filt_list = ['w2','m2','w1']
@@ -120,13 +144,18 @@ def filter_check():
 		print('Moving on to next object...')
 		unprocessed_gals.write(gal + "\n")
 		why_bypass.write(gal+': missing data for some filters'+'\n')
-		continue
+		#continue #fix continue
+		return False
 	elif len(filter_list) == 2:
 		print('Data only found for filters '+filter_list[0]+" and "+filter_list[1]+", processing will not continue. Please check to make sure data for each filter exists.")
 		print('Moving on to next object...')
 		unprocessed_gals.write(gal+'\n')
 		why_bypass.write(gal+': missing data for some filters'+'\n')
-		continue
+		#continue #fix continue
+		return False
+	else:
+		return True
+
 
 
 
@@ -141,7 +170,7 @@ def process_progress():
 		os.remove(gal+'_image.png')
 		image_processing()
 
-
+	#return True
 
 
 
@@ -149,7 +178,12 @@ def process_progress():
 unprocessed_gals = open('unprocessed_gals', 'w+')
 why_bypass = open('why_bypass', 'w+')
 
-swift_db_query() #script written to query the swift database, search the sotbackend fillin subdatabase and return all the targets that are marked as done and have
+#script written to query the swift database 
+#search the sotbackend fillin subdatabase
+#return all the targets that are marked as done and have at least 14ks observing time total
+#puts them in a .txt file
+sdq.obs_progress_query() 
+
 ready_to_process = np.loadtxt('ready_to_process_galaxies.txt', dtype = 'str').tolist()
 
 for gal in ready_to_process: #gal_list now comes from swift_db_query, so is it better to just put the code in here??
@@ -161,31 +195,40 @@ for gal in ready_to_process: #gal_list now comes from swift_db_query, so is it b
 	with open('heasarc_obs.dat', 'r') as fh:
 		rows_list = fh.readlines()
 
-	total_obs = len(rows_list) - 4
-	if total_obs != len(obs_folder_exists): #i want this to happen if there is a new download, but also if this object is new then download has to be run
+	#total_obs = len(rows_list) - 4
+	#if total_obs != len(obs_folder_exists): #i want this to happen if there is a new download, but also if this object is new then download has to be run
 											#so if this needs to be run for a new object too, where do I account for that too??
+											#download_heasarc now accounts for this, so I don't need this structure!
 
 
-		download_heasarc('heasarc_obs.dat')
-	else:
-		print("* Download already done")
-		print("* No new observations to download")
-		print('* Moving on to processing...')
-		#uh hang on can I just stick the processing function into this?? OH YOU FOOL THIS IS THE USE OF FUNCTIONIZING
+	download_heasarc('heasarc_obs.dat')
+	#else:
+	#	print('* Download already done')
+	#	print('* No new observations to download')
+	#	print('* Moving on to processing...')
+		#uh hang on can I just stick the processing function into this?? 
+		#OH YOU FOOL THIS IS THE USE OF FUNCTIONIZING
 		#YOU MADMAN
 		#skip on here to next shenanigans
 
 
-	progress = process_progress()
-	if progress = True:
+	progress = process_progress() #else: program?
+	if progress == True:
 		continue
 
+	filter_check = filter_check()
+	if filter_check == False:
+		continue
 
+	processing = image_processing() #does it just run then??
+	if processing == False:
+		continue
 
-	#processing progress function and filter checks still need to go somewhere in here, but they can be jumped to instead of being part of the bigger function
+	#image_processing()
 
+		#processing progress function and filter checks still need to go somewhere in here, but they can be jumped to instead of being part of the bigger function
 
-	image_processing()
+	photometry_time()
 
 unprocessed_gals.close()
 
