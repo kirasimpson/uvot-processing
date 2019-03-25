@@ -1,4 +1,3 @@
 # uvot-processing
-place to store UVOT LVLS data tools
+This repository contains all the UVOT data tools I have made so far.
 
-Gonna upload a test file here while I learn to use this cursed platform.
