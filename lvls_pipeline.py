@@ -1,6 +1,6 @@
 #! /user/bin/env python
 
-import pIDLy
+import pidly
 #import argparse 
 import numpy as np
 #import subprocess
@@ -18,9 +18,67 @@ import offset_mosaic
 import swift_db_query as sdq
 import query_heasarc as qh
 import download_heasarc as dh
-import surface_phot4 as sp
+import surface_phot as sp
 import phot_plot as phot
 import gal_table_sed as sed
+
+import pdb
+
+def leading_zeros(table):
+	'''
+	Insert leading zeros so that NGC/UGC/UGCA galaxy names match between LVLS list of 258 
+	galaxies and aperture/position tables.
+	Parameters
+	----------
+	table : ASCII table
+		name of a table that follows modification rules of an astropy Table object.
+		https://docs.astropy.org/en/stable/table/modify_table.html
+	'''
+
+	#reduce this just a little
+	for i, entry in enumerate(table["Name"]):
+		if 'NGC' in entry:
+			pieces = entry.split(entry[2])
+			num = pieces[1]
+			zerofill = num.zfill(4)
+			newstring = 'NGC' + zerofill
+			#print(newstring)
+			table["Name"][i] = newstring
+		elif 'KKH' in entry:
+			pieces = entry.split(entry[2])
+			num = pieces[1]
+			zerofill = num.zfill(3)
+			newstring = 'KKH' + zerofill
+			table["Name"][i] = newstring
+		elif 'IC' in entry:
+			pieces = entry.split(entry[1])
+			num = pieces[1]
+			zerofill = num.zfill(4)
+			newstring = 'IC' + zerofill
+			table["Name"][i] = newstring
+		elif 'BK' in entry:
+			pieces = entry.split(entry[1])
+			num = pieces[1]
+			zerofill = num.zfill(3)
+			newstring = 'BK' + zerofill
+			table["Name"][i] = newstring
+		elif 'UGC' in entry:
+			if 'A' in entry:
+				pieces = entry.split(entry[3])
+				num = pieces[1]
+				zerofill = num.zfill(3)
+				newstring = 'UGCA' + zerofill
+				table["Name"][i] = newstring
+			else:
+				pieces = entry.split(entry[2])
+				num = pieces[1]
+				zerofill = num.zfill(5)
+				newstring = 'UGC' + zerofill
+				table["Name"][i] = newstring
+
+	return table
+
+#=============================================================================	
 
 def ra_dec_converter(RA_hr, RA_min, RA_sec, degrees, minutes, seconds, sign):
 	'''
@@ -55,8 +113,16 @@ def photometry_time():
 	#photometric zero points for each UV filter
 	zeropoint_dict = {'w1': 18.95,'w2': 19.11,'m2': 18.54}
 
+	leading_zeros(position_table)
+	leading_zeros(aperture_table)
+
+	#print(leading_zeros(position_table))
+	#input('STOP BASTARD')
+
 	counter1 = 0
+
 	for entry in position_table["Name"]:
+
 		if entry != gal:
 			counter1 += 1
 			continue
@@ -107,18 +173,13 @@ def photometry_time():
 
 #=============================================================================
 
-def image_processing(process=True):
+def make_cube(process=True):
 	'''
 	Turn all the UV data into a cube!
 	'''
-		#test this out, include checking for new data
-		#galaxies with new data...how do I make a new list?
 
-	cr_img_exists = glob.glob('*cr.fits') #makes a list of count rate images that exist in the current directory
-	#cr images made by uvot_deep, so proof that uvot_deep has been run before
-	#inter_list created w/i download_heasarc.py...which is a problem. (make that return true??)
-		#make a sub-function in download heasarc that can return as true, then I can call module here and check true/false
-	#exists if new files exist and were downloaded. 
+	cr_img_exists = glob.glob('*cr.fits') #makes a list of count rate images that exist in the current directory, checks if uvot_deep done
+
 	filter_list = ['w2','m2','w1']
 
 	if len(cr_img_exists) == 0:
@@ -126,19 +187,17 @@ def image_processing(process=True):
 		id_list = glob.glob('000*')
 
 		try:
-			uvot_deep.uvot_deep(id_list, gal+'_', filter_list) #tool made by Lea Hagen
+			uvot_deep.uvot_deep(id_list, gal+'_', filter_list) #tool adapted by Lea Hagen
 		except FileNotFoundError:
 			print('* Required files not made out of uvot_deep for '+gal+', moving on...')
 			unprocessed_gals.write(gal + '\n')
 			why_bypass.write(gal+': required files not made out of uvot_deep'+'\n')
-			#continue #fix continue
-			process = False #does this work here?
+			process = False
 
 		except OSError:
 			print('Too many open files error thrown, whatever that means. Moving on...') #sass maybe not good, maybe chill
 			unprocessed_gals.write(gal + '\n')
 			why_bypass.write(gal+': too many open files error' + '\n')
-			#continue #fix continue
 			process = False #does this work here?
 
 
@@ -173,16 +232,14 @@ def image_processing(process=True):
 	#list of uv filters, can be changed if someone needs optical filter images as well.
 	#filter_list = ['w1', 'm2', 'w2']
 
-	idl = pIDLy.IDL() #crANKY
-
-
+	idl = pidly.IDL('/bulk/pkg/local/bin/idl')
 
 	for filt in filter_list:
-
+	
 		#taken from Lea's code stack_uvot
 		with fits.open(gal + "_" + filt + '_cr.fits') as hdu_cr: #cr = count rate
 
-			pix_clip = sigma_clip(hdu_cr[0].data, sigma=2.5, iters=3)
+			pix_clip = sigma_clip(hdu_cr[0].data, sigma=2.5, maxiters=3)
 			cr_mode = biweight_location(pix_clip.data[~pix_clip.mask])
 			#print('cr_mode: ', cr_mode)
 
@@ -190,7 +247,7 @@ def image_processing(process=True):
 
 			hdu_cr.writeto(gal + '_offset_' + filt + '_cr_bgsub.fits', overwrite=True)
 
-		idl.pro('image_shift', gal) #idl procedure that aligns all the images
+		idl.pro('image_shift', gal) #idl procedure that aligns all the image_shift
 
 	idl.close()
 
@@ -209,7 +266,7 @@ def image_processing(process=True):
 		
 		for i,im in enumerate([im_r, im_g, im_b]):
 			hdu_list = fits.open(im)
-			filt = sigma_clip(hdu_list[0].data, sigma=2, iters=5)
+			filt = sigma_clip(hdu_list[0].data, sigma=2, maxiters=5)
 			vmin_list.append( np.mean(filt.data[~filt.mask]) + 1.5 * np.std(filt.data[~filt.mask]) )
 			hdu_list.close()
 
@@ -282,7 +339,7 @@ def process_progress():
 	elif len(processing_done) > 0 and len(obs_folder_exists) != total_obs:
 		os.remove(gal+'_image.png')
 		print('Rerunning image processing...')
-		image_processing()
+		make_cube()
 		return True
 	else:
 		return False
@@ -303,6 +360,7 @@ def phot_progress(): #check for photometry files
 #I have a problem where two different lists of galaxies are clashing with each other.
 #the easiest solution would seem to be making the lists match up, but what problems would that cause? any?
 
+#currently pulling the list of galaxies from the Spitzer LVL optical magnitudes table (Cook et al.)
 with open('optical_lvls_mags.dat','r') as f:
 	tab1 = f.readlines()
 
@@ -321,24 +379,32 @@ for i in range(n_gal1):
 #print(gal_list)
 
 for gal in gal_list:
-	#if gal == "UGC2847" or gal == 'KKH098' or gal == 'LSBCD565-06' or gal == 'NGC3628' or gal == 'Circinus' or gal == "LEDA166101" or gal == 'HS98_117': #UGC2034, Maffei2, UGC2259
-	#	continue
+	#currently skipping a bunch of galaxies until I can further investigate
+	if gal == "UGC2847" or gal == 'KKH098' or gal == 'LSBCD565-06' or gal == 'NGC3628' or gal == 'Circinus' or gal == "LEDA166101" or gal == 'HS98_117' or gal == 'SCULPTOR-DE1' or gal == 'NGC3031' or gal == 'NGC3034' or gal == 'UGC05336' or gal == 'UGC07699' or gal == 'NGC5055' or '[' in gal or gal == 'ESO410-G005' or gal == 'F8D1' or gal == 'NGC4594' or gal == "NGC5195" or gal == "NGC5236" or gal == 'NGC5457': #UGC2034, Maffei2, UGC2259
+		continue
+
+		#[FM2000]1: files are not gunzipping for some reason
+
+	if 'dag' in gal: #galaxies with this tag were removed from the sample
+		continue
 
 	os.chdir('..') #cd into full lvls directory so it doesn't make everything in your python directory
 	
 	filter_ch = ''
 
 	
+	#check if photometry has been done already
 
-	photometry_done = glob.glob('*phot_plot.png')
-	if len(photometry_done) > 0:
-		print("Photometry plots made, moving along!")
-		continue
 
 	print('querying for '+gal)
 	qh.query_heasarc(gal) 
 
 	os.chdir(gal)
+
+	photometry_done = glob.glob('*plot.png')
+	if len(photometry_done) > 0:
+		print("Photometry plots made, moving along!")
+		continue
 
 	#ch
 	progress = process_progress()
@@ -349,12 +415,11 @@ for gal in gal_list:
 
 		#make sure data for all filters exists for a given object
 		filter_ch = filter_check()
-	#	print(filter_check)
-		#input('STOP')
+
 		if filter_ch == False:
 			continue
 
-		processing = image_processing()
+		processing = make_cube()
 		if processing == False:
 			continue
 
@@ -373,6 +438,7 @@ for gal in gal_list:
 			print('Exception occurred.')
 			print('TypeError, likely non-empty vector case')
 			continue
+		
 	else:
 
 		dh.download_heasarc('heasarc_obs.dat')
@@ -383,11 +449,12 @@ for gal in gal_list:
 		if filter_ch == False:
 			continue
 
-		processing = image_processing() #does it just run then??
+		processing = make_cube() #does it just run then??
 		if processing == False:
 			continue
 
-		#image_processing()
+		
+		#make_cube()
 		value_error_list = list()
 			#processing progress function and filter checks still need to go somewhere in here, but they can be jumped to instead of being part of the bigger function
 		try:
@@ -402,6 +469,9 @@ for gal in gal_list:
 			print('Exception occurred.')
 			print('TypeError, likely non-empty vector case')
 			continue
+		
+
+
 
 	#this is not working, so next step is to find out where exactly the script is stopping and put the fix there
 	phot_done = phot_progress()
@@ -410,7 +480,7 @@ for gal in gal_list:
 
 
 	#now ingest photometry from archival data
-	sed.make_sed_table(gal) #incomplete, won't make anything out of WLM yet
+	#sed.make_sed_table(gal) #incomplete, won't make anything out of WLM yet
 
 
 unprocessed_gals.close()
